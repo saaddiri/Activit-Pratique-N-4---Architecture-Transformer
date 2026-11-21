@@ -1,0 +1,17 @@
+[project]
+name = "architecture-transformer"
+version = "0.1.0"
+description = "Activité Pratique N°4 - Architecture Transformer : RNN, LSTM, Transformer, GPT et BERT avec PyTorch"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "ipykernel>=7.4.0",
+    "ipywidgets>=8.1.9",
+    "matplotlib>=3.11.2",
+    "nbclient>=0.11.0",
+    "nbformat>=5.11.1",
+    "numpy>=2.4.6",
+    "pandas>=3.1.1",
+    "torch>=2.15.0",
+    "transformers>=5.24.0",
+]

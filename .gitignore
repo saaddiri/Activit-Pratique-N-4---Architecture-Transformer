@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Environnement virtuel
+.venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Jeu de données UCI (127 Mo, à extraire depuis le zip, voir README)
+household_power_consumption.txt
+*.zip
+
+# Secrets
+.env
