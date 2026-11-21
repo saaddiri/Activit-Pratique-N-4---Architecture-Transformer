@@ -1,0 +1,1134 @@
+Architecture Transformer
+
+Avant 2017 : RNN, LSTM, GRU
+
+1. RNN
+
+Qu’est-ce qu’un RNN ?
+
+Un réseau de neurones récurrent (Recurrent Neural Network) traite des données organisées en séquences : séries temporelles, textes, signaux, etc.
+
+Il lit les éléments dans l’ordre et met à jour un état caché, qui joue le rôle de mémoire des informations précédentes.
+
+Architecture générale
+
+À chaque instant t, une cellule RNN reçoit :
+
+l’entrée actuelle x_t ;
+l’état caché précédent h_{t-1}.
+
+Elle calcule un nouvel état caché :
+
+Les poids W_{ih}, W_{hh} et le biais b sont appris pendant l’entraînement. Les mêmes paramètres sont utilisés à tous les instants.
+
+Les cellules dessinées représentent une même couche réutilisée dans le temps, et non plusieurs couches différentes.
+
+Architecture de notre exemple
+
+Le modèle utilise 10 valeurs d’une sinusoïde pour prédire la suivante.
+
+Avec batch_first=True, les dimensions sont :
+
+B représente le nombre de séquences traitées ensemble.
+
+Fonctionnement
+
+Initialisation : l’état caché commence à zéro pour chaque séquence.
+Lecture : le RNN lit les valeurs une par une.
+Mémoire : à chaque instant, il combine la nouvelle entrée avec l’état précédent.
+Prédiction : dans notre modèle, la couche linéaire utilise uniquement le dernier état caché.
+Apprentissage : la MSE mesure l’erreur, la rétropropagation à travers le temps calcule les gradients et Adam ajuste les paramètres.
+
+Limite principale
+
+Un RNN classique peut avoir du mal à apprendre des dépendances sur de longues séquences, notamment à cause des gradients qui disparaissent ou explosent.
+
+Les LSTM et les GRU sont des variantes conçues pour mieux gérer la mémoire à long terme.
+
+À retenir : un RNN réutilise les mêmes paramètres pour lire une séquence et actualiser sa mémoire à chaque instant.
+
+Génération d'un exemple de dataset
+
+Explication du code : préparer les données et définir un RNN
+
+Objectif
+
+Le modèle doit apprendre à prédire la prochaine valeur d’une sinusoïde à partir de ses 10 valeurs précédentes.
+
+Cet exemple comprend deux parties :
+La préparation des données.
+La définition du réseau et des outils nécessaires à son entraînement.
+
+Importer PyTorch
+
+import torch importe PyTorch, utilisé pour manipuler des tenseurs, c’est-à-dire des tableaux de nombres.
+import torch.nn as nn importe les composants permettant de construire un réseau de neurones : couches, fonctions de perte, etc.
+
+torch.manual_seed(42) fixe la graine du générateur aléatoire. Cela aide à reproduire les résultats dans un même environnement, notamment en initialisant les paramètres du réseau de la même manière.
+
+Créer une série temporelle
+
+torch.linspace(0, 20, 200) crée 200 valeurs régulièrement espacées entre 0 et 20.
+
+torch.sin(...) applique la fonction sinus à chacune de ces valeurs.
+
+On obtient donc une série de 200 valeurs :
+
+où les u_t sont les points créés par torch.linspace.
+
+La variable longueur_sequence = 10 indique que le modèle utilisera 10 observations consécutives pour prédire la suivante.
+
+Construire les entrées X et les cibles y
+
+Les données sont organisées avec une fenêtre glissante :
+
+Pour chaque indice i :
+
+serie[i:i + longueur_sequence] récupère les 10 valeurs de l’entrée. La borne de fin est exclue.
+serie[i + longueur_sequence] récupère la valeur suivante, qui constitue la cible.
+
+torch.stack(...) rassemble ces éléments dans un seul tenseur.
+
+Comme la série contient 200 valeurs et que chaque entrée en utilise 10, on obtient :
+
+À ce stade :
+
+X a la forme (190, 10).
+y a la forme (190,).
+
+Adapter les dimensions
+
+Avec batch_first=True, le RNN attend des entrées de forme :
+
+Ici, on observe une seule variable à chaque instant : la valeur du sinus.
+
+X.unsqueeze(-1) ajoute une dimension de taille 1 à la fin :
+
+Avant : (190, 10).
+Après : (190, 10, 1).
+
+De même, y.unsqueeze(-1) transforme les cibles :
+
+Avant : (190,).
+Après : (190, 1).
+
+Cette dernière forme correspond à celle des prédictions du modèle : une valeur par séquence.
+
+Séparer entraînement et test
+
+Le découpage conserve l’ordre chronologique :
+
+X[:150] et y[:150] : les 150 premiers exemples servent à l’entraînement.
+X[150:] et y[150:] : les 40 derniers exemples servent au test.
+
+Les fenêtres voisines partagent certaines observations : c’est normal avec une fenêtre glissante. Les cibles de test se situent après les cibles d’entraînement.
+
+Définir la classe PetitRNN
+
+class PetitRNN(nn.Module) définit un réseau de neurones PyTorch.
+
+__init__ construit ses couches.
+super().__init__() initialise la partie héritée de nn.Module.
+forward décrit les calculs effectués pour produire une prédiction.
+
+Le modèle possède deux couches : un RNN et une couche linéaire.
+
+La couche récurrente : nn.RNN
+
+Ses paramètres sont :
+
+Le RNN lit chaque séquence valeur par valeur et met à jour un état caché, que l’on peut voir comme une mémoire :
+
+x_t : la valeur lue à l’instant t.
+h_{t-1} : la mémoire précédente.
+h_t : la mémoire mise à jour.
+W_{ih}, W_{hh} et b : les paramètres appris pendant l’entraînement.
+
+Les mêmes paramètres sont utilisés à chaque instant.
+
+La couche de sortie : nn.Linear(16, 1)
+
+Elle transforme les 16 composantes de la mémoire finale en une valeur prédite :
+
+Comprendre la méthode forward
+
+Étape 1 : lire les séquences
+
+etats, _ = self.rnn(x) fait passer les entrées dans le RNN.
+
+Le RNN renvoie :
+
+Les états cachés à tous les instants, stockés dans etats.
+Les états cachés finaux, ignorés ici avec _.
+
+Si x a la forme (B, 10, 1), alors etats a la forme (B, 10, 16), où B est le nombre de séquences traitées ensemble.
+
+Comme aucun état initial n’est fourni, PyTorch démarre avec une mémoire remplie de zéros pour chaque séquence.
+
+Étape 2 : récupérer la dernière mémoire
+
+dernier_etat = etats[:, -1, :] sélectionne :
+
+: : toutes les séquences ;
+-1 : le dernier instant ;
+: : les 16 composantes de l’état caché.
+
+Le résultat a donc la forme (B, 16).
+
+Cet état résume les informations que le RNN a conservées après avoir lu les 10 valeurs.
+
+Étape 3 : calculer la prédiction
+
+self.sortie(dernier_etat) applique la couche linéaire.
+
+Le résultat a la forme (B, 1) : une prédiction par séquence.
+
+Le cheminement des dimensions est donc :
+
+Créer le modèle, la fonction de perte et l’optimiseur
+
+Le modèle
+
+modele = PetitRNN() crée le réseau et initialise ses paramètres.
+
+La fonction de perte
+
+critere = nn.MSELoss() définit l’erreur quadratique moyenne :
+
+Elle mesure l’écart entre les prédictions et les valeurs réelles. Plus elle est faible, plus les prédictions sont proches des cibles.
+
+L’optimiseur
+
+torch.optim.Adam(modele.parameters(), lr=0.01) prépare l’algorithme qui modifiera les paramètres pendant l’entraînement.
+
+modele.parameters() désigne les paramètres à apprendre dans le RNN et la couche linéaire.
+lr=0.01 est le taux d’apprentissage, qui règle l’amplitude des mises à jour.
+
+À ce stade, le modèle n’est pas encore entraîné. Ce bloc prépare les données, construit le réseau et définit les outils qui seront utilisés dans la boucle d’entraînement.
+
+Entrainement du RNN
+
+Visualiser les prédictions
+
+Explication du code : entraîner et tester le RNN
+
+Objectif
+
+Une fois le modèle créé, on réalise deux étapes :
+
+L’entraînement : ajuster ses paramètres pour améliorer ses prédictions.
+Le test : mesurer ses performances sur des exemples qui n’ont pas servi à ajuster ses paramètres.
+
+Entraîner le modèle
+
+Activer le mode entraînement
+
+modele.train() place le réseau en mode entraînement.
+
+Ce mode est important pour certaines couches, comme Dropout ou BatchNorm, dont le comportement change entre entraînement et évaluation.
+
+Dans notre petit RNN, il ne change pas directement les calculs, mais c’est une bonne pratique.
+
+Attention : cette instruction ne lance pas l’apprentissage à elle seule. Ce sont les calculs et les mises à jour effectués dans la boucle qui entraînent le modèle.
+
+Répéter l’apprentissage pendant 300 époques
+
+for epoch in range(300): répète la boucle 300 fois.
+
+Une époque correspond à un passage sur l’ensemble des données d’entraînement.
+
+Ici, à chaque époque, les 150 séquences de X_train sont traitées ensemble, dans un seul lot. On effectue donc une mise à jour des paramètres par époque.
+
+Étape 1 — Calculer les prédictions
+
+predictions = modele(X_train) réalise la propagation avant.
+
+Cet appel exécute automatiquement la méthode forward du modèle :
+
+Le RNN lit les 10 valeurs de chaque séquence.
+On récupère le dernier état caché.
+La couche linéaire produit une valeur prédite.
+
+Les dimensions sont :
+
+Étape 2 — Mesurer l’erreur
+
+perte = critere(predictions, y_train) compare les prédictions aux valeurs réelles.
+
+Comme critere est une instance de nn.MSELoss, on calcule l’erreur quadratique moyenne :
+
+où :
+
+N est le nombre d’exemples ;
+hat{y}_i est la valeur prédite ;
+y_i est la valeur réelle.
+
+La perte est un seul nombre qui résume l’erreur sur les 150 exemples.
+
+Plus la perte est faible, plus les prédictions sont proches des cibles.
+
+Étape 3 — Effacer les anciens gradients
+
+optimiseur.zero_grad() remet à zéro, ou à None selon la configuration, les gradients des paramètres gérés par l’optimiseur.
+
+Un gradient indique comment la perte varie lorsqu’on modifie un paramètre du modèle.
+
+PyTorch accumule les gradients lors des appels à backward(). Il faut donc effacer ceux de l’itération précédente pour ne pas les additionner involontairement aux nouveaux.
+
+Cette instruction efface les gradients, pas les paramètres appris.
+
+Étape 4 — Calculer les nouveaux gradients
+
+perte.backward() effectue la rétropropagation.
+
+PyTorch calcule, pour chaque paramètre theta, le gradient :
+
+Dans un RNN, ce calcul traverse aussi les étapes temporelles de la séquence : on parle de rétropropagation à travers le temps.
+
+Même si la prédiction utilise uniquement le dernier état caché, cet état dépend des calculs réalisés aux instants précédents.
+
+Cette instruction calcule les gradients, mais ne modifie pas encore les paramètres.
+
+Étape 5 — Mettre à jour les paramètres
+
+optimiseur.step() utilise les gradients pour modifier les paramètres du réseau.
+
+Ici, l’optimiseur est Adam, configuré avec un taux d’apprentissage de 0.01.
+
+Il met à jour :
+
+les poids et les biais du RNN ;
+les poids et le biais de la couche linéaire.
+
+L’objectif est de réduire la perte au fil de l’entraînement, même si celle-ci ne diminue pas nécessairement à chaque époque.
+
+Résumé d’une époque
+
+Données d’entraînement
+Prédictions du RNN
+Calcul de la perte
+Effacement des anciens gradients
+Calcul des nouveaux gradients
+Mise à jour des paramètres
+Époque suivante
+
+Afficher la progression toutes les 50 époques
+
+if (epoch + 1) % 50 == 0: déclenche un affichage aux époques 50, 100, 150, 200, 250 et 300.
+
+epoch + 1 permet de numéroter les époques à partir de 1 plutôt que de 0.
+% 50 calcule le reste de la division par 50.
+Un reste nul signifie que le numéro est un multiple de 50.
+
+Dans l’affichage :
+
+{epoch + 1:3d} affiche un entier sur une largeur minimale de 3 caractères.
+perte.item() extrait le nombre contenu dans le tenseur de perte.
+:.6f affiche ce nombre avec 6 chiffres après la virgule.
+
+La perte affichée correspond aux prédictions calculées avant la mise à jour des paramètres de cette époque.
+
+Tester le modèle
+
+Activer le mode évaluation
+
+modele.eval() place le réseau en mode évaluation.
+
+Comme pour modele.train(), cela adapte le comportement des couches qui distinguent entraînement et évaluation.
+
+Dans notre architecture, cela ne change pas directement les calculs.
+
+Important : modele.eval() ne désactive pas le calcul des gradients. C’est le rôle du bloc suivant.
+
+Désactiver le suivi des gradients
+
+with torch.no_grad(): indique à PyTorch de ne pas construire le graphe nécessaire au calcul des gradients pour les opérations de ce bloc.
+
+Pendant le test, on veut uniquement produire des prédictions, sans apprendre.
+
+Cela permet notamment de :
+
+réduire la mémoire utilisée ;
+éviter le travail nécessaire au suivi des gradients.
+
+Aucun appel à backward() ou à optimiseur.step() n’est effectué : les paramètres du modèle ne sont donc pas modifiés.
+
+Prédire sur les données de test
+
+predictions = modele(X_test) applique le modèle entraîné aux 40 séquences de test.
+
+Ces exemples n’ont pas été utilisés pour ajuster les paramètres.
+
+Calculer l’erreur de test
+
+erreur_test = critere(predictions, y_test) calcule la MSE sur l’ensemble des 40 exemples de test.
+
+Cette erreur mesure la capacité du modèle à prédire sur des données autres que celles utilisées pour apprendre.
+
+Une erreur d’entraînement faible ne suffit pas : si l’erreur de test est nettement plus élevée, cela peut notamment indiquer un surapprentissage ou une différence entre les données d’entraînement et de test.
+
+Afficher les résultats
+
+Les trois dernières instructions affichent :
+
+L’erreur de test globale, avec 6 décimales.
+La valeur réelle du premier exemple de test, avec 4 décimales.
+La prédiction pour ce même exemple, avec 4 décimales.
+
+y_test[0] sélectionne la première cible de test.
+predictions[0] sélectionne la première prédiction.
+.item() transforme un tenseur contenant un seul élément en nombre Python.
+n ajoute un saut de ligne avant l’affichage.
+
+La comparaison affichée concerne un seul exemple, tandis que l’erreur de test résume les 40 exemples.
+
+À retenir
+
+Pendant l’entraînement, le modèle ajuste ses paramètres. Pendant le test, il les utilise sans les modifier.
+
+2. LSTM
+
+Résumé : architecture et fonctionnement d’un LSTM
+
+Définition
+
+Un LSTM (Long Short-Term Memory) est une variante du RNN conçue pour mieux apprendre les dépendances à long terme dans une séquence.
+
+Il transmet deux états d’un instant au suivant :
+
+L’état caché h_t : la représentation produite à l’instant courant.
+L’état de cellule c_t : une mémoire interne permettant de conserver des informations dans le temps.
+
+Architecture d’une cellule LSTM
+
+À chaque instant t, la cellule reçoit :
+
+l’entrée actuelle x_t ;
+l’état caché précédent h_{t-1} ;
+l’état de cellule précédent c_{t-1}.
+
+Elle utilise trois portes, dont les valeurs sont comprises entre 0 et 1, pour contrôler la circulation de l’information :
+
+La cellule calcule également un contenu candidat tilde{c}_t à ajouter à la mémoire.
+
+Les mises à jour sont :
+
+Le symbole odot représente une multiplication élément par élément.
+
+Entrée actuelle xₜ
+
+Les mêmes paramètres sont réutilisés à chaque instant.
+
+Architecture de notre exemple
+
+Le modèle utilise 10 valeurs consécutives d’une sinusoïde pour prédire la suivante.
+
+Les 16 unités sont réutilisées aux 10 instants. Les deux états de 16 nombres ne correspondent pas à deux couches : ils appartiennent à la même couche LSTM.
+
+Séquence de 10 valeurs
+LSTM : 16 unités
+Mise à jour de hₜ et cₜ
+Dernier état caché h₁₀
+Linear(16, 1)
+Prédiction de la valeur suivante
+
+Avec batch_first=True, les dimensions utilisées pour prédire sont :
+
+B représente le nombre de séquences traitées ensemble.
+
+Fonctionnement et apprentissage
+
+Initialiser h_0 et c_0 à zéro pour chaque séquence.
+Lire les valeurs successivement.
+Mettre à jour la mémoire grâce aux portes.
+Prédire avec la couche linéaire à partir du dernier état caché.
+Mesurer l’erreur avec la MSE.
+Calculer les gradients par rétropropagation à travers le temps, puis ajuster les paramètres avec Adam.
+
+Différence avec un RNN classique
+
+À retenir : un LSTM apprend quelles informations conserver, ajouter et exposer grâce à une mémoire interne contrôlée par des portes.
+
+3.Architecture Transformer
+
+Architecture et fonctionnement d’un Transformer
+
+Définition
+
+Un Transformer est un réseau de neurones conçu pour traiter des séquences grâce au mécanisme d’attention.
+
+Contrairement au RNN et au LSTM, il ne transmet pas une mémoire récurrente d’un instant au suivant. Il met directement en relation les positions d’une séquence et peut calculer leurs représentations en parallèle.
+
+Principaux composants
+
+Un Transformer peut utiliser un encodeur, un décodeur, ou les deux. Notre exemple utilise uniquement un encodeur, suivi d’une couche linéaire.
+
+Fonctionnement du Self Attention
+
+À partir des représentations d’entrée, le modèle calcule trois ensembles de vecteurs :
+
+Q — Queries (requêtes) : ce que chaque position recherche.
+K — Keys (clés) : ce que chaque position propose pour être comparée aux requêtes.
+V — Values (valeurs) : les informations à combiner.
+
+L’attention est calculée par :
+
+Le modèle compare les requêtes aux clés, obtient des poids d’attention, puis calcule une combinaison pondérée des valeurs.
+
+L’attention multi-têtes effectue plusieurs calculs d’attention en parallèle pour apprendre différentes relations entre les positions.
+
+Architecture de notre exemple
+
+Le modèle utilise 10 valeurs d’une sinusoïde pour prédire la suivante.
+
+Séquence de 10 valeurs
+Ajout de l’information de position
+Auto-attention à 2 têtes
+Connexion résiduelle + normalisation
+Connexion résiduelle + normalisation
+Représentation de la dernière position
+Linear(16, 1)
+Prédiction de la valeur suivante
+
+Les dimensions sont :
+
+B représente le nombre de séquences traitées ensemble.
+
+Prédiction et apprentissage
+
+Projeter les valeurs dans un espace de dimension 16.
+Ajouter les positions pour représenter l’ordre.
+Combiner les informations de la séquence avec l’auto-attention.
+Transformer les représentations avec le réseau feed-forward.
+Prédire à partir de la représentation de la dernière position.
+Mesurer l’erreur avec la MSE, calculer les gradients par rétropropagation et ajuster les paramètres avec Adam.
+
+Dans cet exemple, aucun masque causal n’est nécessaire : les 10 valeurs d’entrée sont toutes connues avant de prédire la onzième, qui n’est jamais fournie en entrée.
+
+Différence avec un RNN ou un LSTM
+
+Limite principale
+
+L’auto-attention complète calcule les relations entre toutes les paires de positions. Son coût augmente donc quadratiquement avec la longueur de la séquence, ce qui peut devenir coûteux pour de longues entrées.
+
+À retenir : un Transformer construit la représentation de chaque position en combinant les informations pertinentes de la séquence grâce à l’attention.
+
+Explication détaillée du code : prédiction avec un Transformer
+
+Objectif du programme
+
+Le programme entraîne un petit Transformer à prédire la prochaine valeur d’une sinusoïde à partir de ses 10 valeurs précédentes.
+
+Le traitement comprend quatre étapes :
+
+Préparer les données.
+Construire le modèle.
+Entraîner ses paramètres.
+Évaluer ses prédictions sur les données de test.
+
+Le modèle utilise un encodeur Transformer suivi d’une couche linéaire. Il ne contient pas de décodeur.
+
+Importer les bibliothèques
+
+import torch importe PyTorch pour créer des tenseurs et effectuer les calculs.
+import torch.nn as nn importe les composants des réseaux de neurones : couches, fonctions de perte, etc.
+
+torch.manual_seed(42) fixe la graine du générateur aléatoire. Cela aide à reproduire les résultats dans un même environnement, notamment l’initialisation des paramètres.
+
+Créer la série temporelle
+
+Générer une sinusoïde
+
+serie = torch.sin(torch.linspace(0, 20, 200))
+
+Cette instruction effectue deux opérations :
+
+torch.linspace(0, 20, 200) crée 200 valeurs régulièrement espacées entre 0 et 20.
+torch.sin(...) calcule leur sinus.
+
+Le résultat est un tenseur de forme (200,), contenant 200 observations.
+
+Définir la longueur des entrées
+
+longueur_sequence = 10
+
+Chaque exemple utilisera 10 observations consécutives pour prédire la suivante.
+
+Construire les entrées et les cibles
+
+Les entrées X
+
+Pour chaque indice i, l’expression :
+
+serie[i:i + longueur_sequence]
+
+récupère 10 valeurs consécutives. La borne de fin est exclue.
+
+torch.stack(...) rassemble toutes ces fenêtres dans un seul tenseur.
+
+Les cibles y
+
+Pour chaque fenêtre, l’expression :
+
+serie[i + longueur_sequence]
+
+récupère la valeur immédiatement suivante.
+
+Le nombre d’exemples est :
+
+À ce stade :
+
+X a la forme (190, 10).
+y a la forme (190,).
+
+Ajouter la dimension des variables
+
+X = X.unsqueeze(-1) ajoute une dimension de taille 1 à la fin :
+
+Cette dernière dimension indique qu’on observe une seule variable à chaque instant.
+
+y = y.unsqueeze(-1) transforme les cibles :
+
+Cette forme correspondra à celle des prédictions : une valeur par exemple.
+
+Séparer entraînement et test
+
+Le découpage conserve l’ordre chronologique :
+
+X[:150] et y[:150] : les 150 premiers exemples pour l’entraînement.
+X[150:] et y[150:] : les 40 derniers pour le test.
+
+Les fenêtres voisines partagent certaines observations : c’est normal avec une fenêtre glissante. Les cibles de test se situent après celles d’entraînement.
+
+Définir la classe du modèle
+
+class PetitTransformer(nn.Module):
+
+Le modèle hérite de nn.Module, la classe de base des réseaux de neurones PyTorch.
+
+Deux méthodes ont des rôles différents :
+
+__init__ construit les couches et leurs paramètres.
+forward décrit les calculs appliqués aux entrées.
+
+super().__init__() initialise la partie héritée de nn.Module, nécessaire notamment au suivi des paramètres.
+
+Le paramètre longueur_max=10 fixe le nombre maximal de positions disponibles dans ce modèle.
+
+Projeter chaque valeur dans un vecteur
+
+dimension = 16
+
+Chaque position sera représentée par un vecteur de 16 nombres.
+
+self.projection = nn.Linear(1, dimension)
+
+Cette couche transforme chaque valeur scalaire en un vecteur :
+
+Les mêmes paramètres de projection sont appliqués à toutes les positions.
+
+Pour un lot de B séquences :
+
+Les 16 composantes ne correspondent pas à 16 instants. Elles constituent la représentation d’une seule position.
+
+Représenter les positions
+
+self.positions = nn.Embedding(longueur_max, dimension)
+
+Cette couche contient une table de 10 vecteurs appris de dimension 16 :
+
+un vecteur pour la position 0 ;
+un vecteur pour la position 1 ;
+…
+un vecteur pour la position 9.
+
+L’auto-attention ne fournit pas, à elle seule, l’information d’ordre. Ces vecteurs permettent donc au modèle de distinguer les positions.
+
+Ils sont ajustés pendant l’entraînement, comme les autres paramètres.
+
+Dans cette implémentation, les séquences ne peuvent pas dépasser longueur_max positions.
+
+Construire un bloc d’encodeur Transformer
+
+nn.TransformerEncoderLayer(...) crée un bloc contenant principalement :
+
+Une auto-attention multi-têtes.
+Un réseau feed-forward.
+Des connexions résiduelles et des normalisations.
+
+Signification des paramètres
+
+Auto-attention à deux têtes
+
+Chaque tête utilise ici :
+
+Pour chaque position, l’attention apprend à pondérer les informations provenant des différentes positions de la séquence.
+
+Les deux têtes peuvent apprendre des relations différentes. Leurs résultats sont concaténés puis projetés pour obtenir à nouveau 16 composantes par position.
+
+d_model doit être divisible par nhead.
+
+Réseau feed-forward
+
+Dans notre configuration, il suit cette architecture :
+
+Il contient :
+
+une couche linéaire de 16 vers 32 ;
+une activation ReLU, utilisée par défaut ;
+une couche linéaire de 32 vers 16.
+
+Ce même réseau est appliqué séparément à chaque position. Contrairement à l’attention, il ne mélange pas directement les positions entre elles.
+
+Connexions résiduelles et normalisation
+
+Les connexions résiduelles ajoutent l’entrée d’un sous-bloc à sa sortie. Elles facilitent la circulation de l’information et des gradients.
+
+La normalisation LayerNorm contribue à stabiliser les représentations.
+
+Avec les réglages par défaut utilisés ici, le bloc suit l’ordre :
+
+Entrée
+Auto-attention
+Addition résiduelle + LayerNorm
+Réseau feed-forward
+Addition résiduelle + LayerNorm
+
+Le bloc conserve la forme (B, 10, 16).
+
+Construire l’encodeur et la couche de sortie
+
+L’encodeur
+
+self.encodeur = nn.TransformerEncoder(couche, num_layers=1)
+
+Cette instruction construit un encodeur contenant un seul bloc.
+
+num_layers permettrait d’en empiler plusieurs pour obtenir un modèle plus profond.
+
+La couche de sortie
+
+self.sortie = nn.Linear(dimension, 1)
+
+Cette couche transforme un vecteur de 16 nombres en une valeur prédite :
+
+Aucune activation n’est ajoutée après cette couche.
+
+Comprendre la méthode forward
+
+Étape 1 — Récupérer la longueur de la séquence
+
+longueur = x.size(1)
+
+Avec une entrée de forme (B, 10, 1), la dimension d’indice 1 vaut 10.
+
+Étape 2 — Projeter les valeurs
+
+x = self.projection(x)
+
+Chaque valeur devient un vecteur de 16 composantes :
+
+Étape 3 — Créer les indices de position
+
+indices = torch.arange(longueur, device=x.device)
+
+Cette instruction crée :
+
+device=x.device place ces indices sur le même appareil que x, par exemple le CPU ou le GPU.
+
+Étape 4 — Récupérer les vecteurs de position
+
+positions = self.positions(indices)
+
+On obtient un tenseur de forme (10, 16).
+
+Étape 5 — Ajouter les positions
+
+x = x + positions.unsqueeze(0)
+
+unsqueeze(0) transforme les positions en un tenseur de forme (1, 10, 16).
+
+Grâce à la diffusion automatique des dimensions, ou broadcasting, les mêmes vecteurs de position sont ajoutés à toutes les séquences du lot :
+
+Étape 6 — Appliquer l’encodeur
+
+representations = self.encodeur(x)
+
+L’encodeur enrichit la représentation de chaque position à l’aide des autres positions.
+
+La forme reste (B, 10, 16).
+
+Étape 7 — Sélectionner la dernière position
+
+derniere_position = representations[:, -1, :]
+
+Cette sélection conserve :
+
+toutes les séquences avec le premier : ;
+la dernière position avec -1 ;
+toutes les composantes avec le dernier :.
+
+Le résultat a la forme (B, 16).
+
+Après l’attention, cette représentation peut intégrer des informations provenant des 10 valeurs, et pas uniquement de la dernière.
+
+Étape 8 — Produire la prédiction
+
+return self.sortie(derniere_position)
+
+La couche linéaire produit une valeur par séquence :
+
+Pourquoi n’utilise-t-on pas de masque causal ?
+
+Les 10 valeurs d’entrée sont toutes connues au moment de prédire la suivante.
+
+Elles peuvent donc s’observer mutuellement dans l’attention sans accéder à la cible : la onzième valeur n’est jamais fournie en entrée.
+
+Un masque causal serait nécessaire si l’on voulait prédire la valeur suivante à chaque position tout en interdisant l’accès aux positions ultérieures.
+
+Préparer l’apprentissage
+
+Créer le modèle
+
+modele = PetitTransformer(longueur_max=longueur_sequence)
+
+Cette instruction construit le réseau et initialise ses paramètres.
+
+Définir la fonction de perte
+
+critere = nn.MSELoss()
+
+L’erreur quadratique moyenne mesure l’écart entre les prédictions et les cibles :
+
+Définir l’optimiseur
+
+optimiseur = torch.optim.Adam(modele.parameters(), lr=0.01)
+
+Adam ajuste tous les paramètres entraînables, notamment :
+
+la projection d’entrée ;
+les vecteurs de position ;
+les paramètres de l’attention ;
+le réseau feed-forward et les normalisations ;
+la couche de sortie.
+
+lr=0.01 est le taux d’apprentissage.
+
+Entraîner le modèle
+
+modele.train() active le mode entraînement.
+
+La boucle for epoch in range(300): effectue 300 époques.
+
+À chaque époque :
+
+Les 150 séquences sont traitées ensemble : il y a donc une mise à jour des paramètres par époque.
+
+Contrairement au RNN ou au LSTM, il n’y a pas ici de chaîne d’états récurrents à parcourir dans le temps lors de la rétropropagation.
+
+Afficher la progression
+
+if (epoch + 1) % 50 == 0: affiche la perte toutes les 50 époques.
+
+epoch + 1 numérote les époques à partir de 1.
+% 50 == 0 repère les multiples de 50.
+perte.item() extrait le nombre contenu dans le tenseur.
+:.6f affiche six chiffres après la virgule.
+
+La perte affichée a été calculée avant la mise à jour des paramètres de l’époque correspondante.
+
+Tester le modèle
+
+Passer en mode évaluation
+
+modele.eval() active le mode évaluation.
+
+Comme le dropout est désactivé dans cet exemple, cela ne désactive aucune unité supplémentaire.
+
+Le mode évaluation ne désactive pas à lui seul le suivi des gradients.
+
+Désactiver le suivi des gradients
+
+with torch.no_grad(): évite de construire le graphe nécessaire à leur calcul.
+
+Cela réduit notamment la mémoire utilisée pendant l’évaluation.
+
+Calculer les prédictions et l’erreur
+
+modele(X_test) produit les 40 prédictions de test.
+critere(predictions, y_test) calcule leur MSE.
+
+Aucune mise à jour des paramètres n’est effectuée.
+
+Afficher les résultats
+
+Le programme affiche :
+
+L’erreur moyenne sur les 40 exemples de test.
+La cible du premier exemple : y_test[0].
+La prédiction correspondante : predictions[0].
+
+La comparaison affichée concerne donc un seul exemple, tandis que l’erreur de test résume l’ensemble des exemples.
+
+À retenir
+
+Le cheminement des données est :
+
+Le Transformer apprend à combiner les informations de la séquence grâce à l’attention, puis utilise cette représentation pour prédire la valeur suivante.
+
+GPT
+
+Générer du texte avec GPT-2
+
+Objectif
+
+Cette implémentation utilise GPT-2 préentraîné pour générer la suite d’un texte.
+
+Exemple d’entrée :
+
+Artificial intelligence can help people
+
+Le modèle prédit un token suivant, l’ajoute au texte, puis recommence. Ce fonctionnement est appelé génération autorégressive.
+
+Contrairement à BERT, GPT-2 ne complète pas un masque en regardant les deux côtés : il prédit la suite à partir des tokens déjà disponibles.
+
+Charger le tokenizer et le modèle
+
+Nous utilisons le modèle gpt2, principalement entraîné sur des textes en anglais.
+
+AutoTokenizer transforme le texte en tokens, puis en identifiants numériques.
+AutoModelForCausalLM charge GPT-2 avec une tête de prédiction du prochain token.
+modele.eval() place le modèle en mode évaluation, notamment en désactivant le dropout.
+
+Le modèle est déjà entraîné : aucun entraînement supplémentaire n’est effectué dans cet exemple.
+
+Le premier lancement télécharge les fichiers du modèle et du tokenizer.
+
+Configurer le token de remplissage
+
+GPT-2 ne possède pas de token de remplissage dédié par défaut.
+
+L’instruction :
+
+tokenizer.pad_token = tokenizer.eos_token
+
+utilise le token de fin de texte comme token de remplissage.
+
+L’instruction :
+
+modele.config.pad_token_id = tokenizer.pad_token_id
+
+renseigne cette configuration dans le modèle.
+
+Le remplissage sert notamment à regrouper des séquences de longueurs différentes dans un même batch. Avec une seule phrase, comme ici, il n’est généralement pas nécessaire d’ajouter du remplissage.
+
+Transformer le texte en tenseurs
+
+L’appel :
+
+tokenizer(texte, return_tensors="pt")
+
+convertit le texte en tenseurs PyTorch. Il produit notamment :
+
+La forme de input_ids est (1, L), où :
+
+1 représente le nombre de textes dans le batch ;
+L représente le nombre de tokens du texte initial.
+
+Un token n’est pas forcément un mot entier : il peut représenter un mot, une partie de mot ou un signe de ponctuation.
+
+Comprendre le fonctionnement de GPT-2
+
+GPT-2 est un Transformer de type décodeur uniquement.
+
+Les identifiants des tokens sont transformés en vecteurs, auxquels sont ajoutées des représentations de position. Ces vecteurs traversent ensuite plusieurs blocs Transformer.
+
+Chaque bloc contient notamment :
+
+une auto-attention causale multi-têtes ;
+un réseau feed-forward ;
+des connexions résiduelles ;
+des normalisations.
+
+L’attention causale empêche une position de regarder les tokens futurs. Elle peut seulement utiliser les tokens précédents et le token courant.
+
+À la sortie, le modèle calcule des scores sur son vocabulaire pour prédire le token suivant.
+
+Générer la suite du texte
+
+L’appel :
+
+modele.generate(entrees, ...)
+
+gère automatiquement la génération token par token.
+
+À chaque étape :
+
+le modèle utilise le texte déjà disponible ;
+il calcule les scores des tokens possibles ;
+un token est sélectionné selon les paramètres de génération ;
+ce token est ajouté à la séquence ;
+le processus recommence jusqu’à une condition d’arrêt.
+
+Le calcul est effectué dans torch.no_grad() pour désactiver le suivi des gradients et réduire la mémoire utilisée pendant l’inférence.
+
+Comprendre les paramètres de génération
+
+Température
+
+La température ajuste les scores avant leur conversion en probabilités :
+
+inférieure à 1 : favorise davantage les tokens les plus probables ;
+égale à 1 : conserve la distribution non ajustée ;
+supérieure à 1 : rend la distribution plus diffuse.
+
+Échantillonnage top_p
+
+Le paramètre top_p adapte le nombre de candidats à chaque étape :
+
+si quelques tokens concentrent presque toute la probabilité, peu de candidats sont conservés ;
+si les probabilités sont plus dispersées, davantage de candidats sont conservés.
+
+Avec do_sample=True, plusieurs exécutions peuvent produire des textes différents.
+
+La génération peut s’arrêter avant 50 nouveaux tokens si le modèle produit son token de fin.
+
+Reconvertir les tokens en texte
+
+L’expression :
+
+tokenizer.decode(sortie[0], skip_special_tokens=True)
+
+convertit la première séquence générée en texte lisible.
+
+sortie[0] sélectionne la première séquence du batch.
+skip_special_tokens=True retire les tokens spéciaux de l’affichage.
+
+Pour GPT-2, la séquence renvoyée par generate() contient le texte initial suivi du texte généré.
+
+Résumé du fonctionnement
+
+Texte initial
+Tokenisation
+Embeddings des tokens + positions
+Blocs Transformer avec attention causale
+Scores sur le vocabulaire
+Sélection du prochain token
+Ajout du token à la séquence
+Répétition jusqu’à l’arrêt
+Décodage en texte lisible
+
+À retenir : GPT-2 génère du texte un token à la fois à partir du contexte précédent. Il produit une continuation plausible, mais ne garantit ni son exactitude ni sa cohérence.
+
+BERT
+
+Compléter un texte avec BERT
+
+Objectif
+
+Cette implémentation utilise BERT préentraîné pour retrouver un token masqué dans une phrase.
+
+Exemple d’entrée :
+
+Paris est la [MASK] de la France.
+
+Le modèle attribue une probabilité à chaque token de son vocabulaire pour remplacer [MASK]. Une réponse attendue serait « capitale », mais les propositions dépendent du modèle.
+
+Contrairement à GPT, BERT ne cherche pas ici à générer la suite du texte : il utilise le contexte avant et après le masque pour compléter la phrase.
+
+Charger le tokenizer et le modèle
+
+Nous utilisons bert-base-multilingual-cased, une version multilingue de BERT qui prend en charge le français et distingue les majuscules des minuscules.
+
+AutoTokenizer transforme le texte en tokens, puis en identifiants numériques.
+AutoModelForMaskedLM charge BERT avec une tête de prédiction adaptée aux tokens masqués.
+modele.eval() place le modèle en mode évaluation, notamment en désactivant le dropout.
+
+Le modèle est déjà entraîné : aucun entraînement supplémentaire n’est effectué dans cet exemple.
+
+Préparer la phrase
+
+tokenizer.mask_token fournit le token de masque attendu par le modèle, ici [MASK].
+
+L’appel tokenizer(texte, return_tensors="pt") transforme la phrase en tenseurs PyTorch. Il produit notamment :
+
+Le tokenizer ajoute également les tokens spéciaux nécessaires à BERT, notamment [CLS] et [SEP].
+
+La forme de input_ids est (1, L), où L est le nombre de tokens, tokens spéciaux inclus.
+
+Un token n’est pas forcément un mot entier : certains mots sont découpés en plusieurs sous-mots.
+
+Repérer la position du masque
+
+La comparaison :
+
+entrees["input_ids"][0] == tokenizer.mask_token_id
+
+permet de repérer le token [MASK] dans la séquence.
+
+nonzero() récupère sa position et item() la convertit en entier Python.
+
+Cette implémentation suppose que la phrase contient exactement un masque.
+
+Calculer les prédictions
+
+L’appel modele(entrees) transmet les tenseurs d’entrée au modèle.
+
+BERT construit une représentation de chaque position grâce à son attention bidirectionnelle : le masque peut utiliser aussi bien « Paris est la » que « de la France ».
+
+Le calcul est effectué dans torch.no_grad() pour désactiver le suivi des gradients et réduire la mémoire utilisée pendant l’inférence.
+
+La sortie sortie.logits a la forme :
+
+(1, L, V)
+
+avec :
+
+1 : le nombre de phrases dans le batch ;
+L : le nombre de tokens de la séquence ;
+V : la taille du vocabulaire.
+
+Les logits sont des scores bruts, pas encore des probabilités.
+
+Sélectionner les scores du masque
+
+L’expression :
+
+sortie.logits[0, position_masque, :]
+
+sélectionne les scores de tous les tokens du vocabulaire pour la position masquée de la première phrase.
+
+Le tenseur obtenu a la forme (V,).
+
+Obtenir les cinq meilleures propositions
+
+torch.softmax(scores, dim=-1) transforme les scores en probabilités dont la somme vaut 1 sur l’ensemble du vocabulaire.
+
+torch.topk(probabilites, k=5) sélectionne ensuite :
+
+les cinq probabilités les plus élevées ;
+les identifiants des tokens correspondants.
+
+Ces probabilités reflètent les préférences du modèle dans ce contexte : elles ne garantissent pas qu’une proposition est correcte.
+
+Afficher les phrases complétées
+
+Pour chaque proposition :
+
+tokenizer.decode() transforme l’identifiant du token en texte ;
+replace() remplace [MASK] par ce texte ;
+le programme affiche la phrase complétée et sa probabilité.
+
+Cette reconstruction est simple et adaptée à l’exemple. Certains candidats peuvent toutefois être des sous-mots plutôt que des mots complets.
+
+Résumé du fonctionnement
+
+Phrase avec un masque
+Tokenisation
+BERT : analyse du contexte à gauche et à droite
+Scores du vocabulaire à la position masquée
+Softmax
+Sélection des cinq tokens les plus probables
+Affichage des propositions
+
+À retenir : GPT prédit généralement le prochain token à partir du contexte précédent, tandis que BERT peut prédire un token masqué en utilisant les deux côtés de la phrase.
