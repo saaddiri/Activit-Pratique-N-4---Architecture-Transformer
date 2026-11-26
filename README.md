@@ -1,6 +1,6 @@
 # Architecture Transformer
 
-Activité Pratique N°4 — Pr. Mohamed YOUSSFI
+Activité Pratique N°4
 
 Du réseau récurrent au Transformer : on entraîne un **RNN**, un **LSTM** et un **Transformer** à prédire la valeur suivante d'une sinusoïde, puis on utilise deux grands modèles préentraînés, **GPT-2** (génération de texte) et **BERT** (mot masqué). Les exercices construisent ensuite trois Transformers depuis zéro : prévision de consommation électrique, mini-GPT et mini-BERT.
 
