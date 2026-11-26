@@ -4,7 +4,7 @@ Activité Pratique N°4
 
 Du réseau récurrent au Transformer : on entraîne un **RNN**, un **LSTM** et un **Transformer** à prédire la valeur suivante d'une sinusoïde, puis on utilise deux grands modèles préentraînés, **GPT-2** (génération de texte) et **BERT** (mot masqué). Les exercices construisent ensuite trois Transformers depuis zéro : prévision de consommation électrique, mini-GPT et mini-BERT.
 
-Le notebook `architecture_transformer.ipynb` reprend le code et les explications du professeur sans les modifier ; les solutions des exercices sont ajoutées dans de nouvelles cellules, sous chaque énoncé. Il est livré **exécuté**, avec les sorties visibles.
+Le notebook `architecture_transformer.ipynb` reprend le code et les explications du cours sans les modifier ; les solutions des exercices sont ajoutées dans de nouvelles cellules, sous chaque énoncé. Il est livré **exécuté**, avec les sorties visibles.
 
 ## Technologies
 
